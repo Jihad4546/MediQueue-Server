@@ -110,7 +110,7 @@ async function run() {
         res.status(500).send({ error: err.message });
       }
     });
-    app.get("/addTutor/:id", async (req, res) => {
+    app.get("/addTutor/:id",  async (req, res) => {
       const result = await dataCollection.findOne({
         _id: new ObjectId(req.params.id),
       });
