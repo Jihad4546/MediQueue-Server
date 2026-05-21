@@ -203,7 +203,7 @@ async function run() {
       try {
         const bookingData = req.body;
 
-        // Front-end standard error handling check (Double booking protection)
+        // ১. একই স্টুডেন্ট এই টিউটরকে অলরেডি বুক করেছে কিনা চেক (Double Booking Protection)
         const exist = await bookingCollection.findOne({
           studentEmail: bookingData.studentEmail,
           tutorId: bookingData.tutorId,
@@ -216,10 +216,38 @@ async function run() {
           });
         }
 
+        // ২. ডাটাবেজ থেকে টিউটরের বর্তমান স্লট চেক করা
+        const tutor = await dataCollection.findOne({
+          _id: new ObjectId(bookingData.tutorId),
+        });
+
+        if (!tutor) {
+          return res.send({ success: false, message: "Tutor not found" });
+        }
+
+        // সিট বা স্লট সংখ্যা চেক করা (totalSlot = 0 হলে বুকিং ব্লক)
+        if (Number(tutor.totalSlot || 0) <= 0) {
+          return res.send({
+            success: false,
+            message:
+              "This session is fully booked. You can't join at the moment.",
+          });
+        }
+
+        // ৩. সব ঠিক থাকলে বুকিং কালেকশনে ডেটা সেভ করা
         const result = await bookingCollection.insertOne(bookingData);
 
         if (result.acknowledged) {
-          res.send({ success: true, message: "Booking saved successfully" });
+          // ৪. 🎯 সফল বুকিংয়ের পর স্বয়ংক্রিয়ভাবে টিউটরের totalSlot ১টি কমিয়ে দেওয়া ($inc: -1)
+          await dataCollection.updateOne(
+            { _id: new ObjectId(bookingData.tutorId) },
+            { $inc: { totalSlot: -1 } },
+          );
+
+          res.send({
+            success: true,
+            message: "Booking successful and slot decreased by 1!",
+          });
         } else {
           res.send({ success: false, message: "Failed to save booking" });
         }
@@ -229,38 +257,6 @@ async function run() {
     });
 
     // ৩. DECREASE SLOT (FRONT-END REQ MATCHED)
-    app.patch("/addTutor/decrease-slot/:tutorId", async (req, res) => {
-      try {
-        const tutorId = req.params.tutorId;
-
-        const tutor = await dataCollection.findOne({
-          _id: new ObjectId(tutorId),
-        });
-
-        if (!tutor) {
-          return res.send({ success: false, message: "Tutor not found" });
-        }
-
-        let currentSlot = Number(tutor.totalSlot || 0);
-
-        if (currentSlot <= 0) {
-          return res.send({ success: false, message: "No slots available" });
-        }
-
-        const result = await dataCollection.updateOne(
-          { _id: new ObjectId(tutorId) },
-          { $set: { totalSlot: currentSlot - 1 } },
-        );
-
-        if (result.modifiedCount > 0) {
-          res.send({ success: true, message: "Slot updated successfully" });
-        } else {
-          res.send({ success: false, message: "Slot not updated" });
-        }
-      } catch (err) {
-        res.status(500).send({ success: false, error: err.message });
-      }
-    });
 
     // GET USER BOOKINGS
     app.get("/bookSession/:email", async (req, res) => {
@@ -277,17 +273,24 @@ async function run() {
 
     // CANCEL BOOKING
     app.patch("/cancelBooking/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const result = await bookingCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { bookStatus: "cancelled" } },
-        );
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ error: err.message });
-      }
-    });
+  try {
+    const id = req.params.id;
+    
+    // স্ট্যাটাস আপডেট করা
+    const result = await bookingCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { bookStatus: "cancelled" } }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ success: true, message: "Updated" });
+    } else {
+      res.status(404).send({ success: false, message: "Not found" });
+    }
+  } catch (err) {
+    res.status(500).send({ success: false, error: err.message });
+  }
+});
 
     // DELETE BOOKING
     app.delete("/bookSession/:id", async (req, res) => {
