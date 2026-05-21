@@ -57,60 +57,55 @@ async function run() {
     });
 
     // ---------------- TUTORS ----------------
-    // ---------------- TUTORS ----------------
-    // ---------------- TUTORS ----------------
     app.get("/addTutor", async (req, res) => {
       try {
-        const { search, startDate, endDate } = req.query;
+        const { search, startDate, endDate, limit } = req.query; // ✅ limit যোগ
 
-        // ১. ডাটাবেজ থেকে প্রথমে সব ডাটা নিয়ে আসা
         const allData = await dataCollection.find({}).toArray();
 
-        // ২. জাভাস্ক্রিপ্ট দিয়ে নিখুঁতভাবে ফিল্টার করা
         const filteredResult = allData.filter((tutor) => {
-          // ---- নাম দিয়ে ফিল্টার (destinationName চেক করা হচ্ছে) ----
           if (search && search.trim() !== "") {
             const tutorName = tutor.destinationName
               ? tutor.destinationName.toLowerCase()
               : "";
-            if (!tutorName.includes(search.toLowerCase())) {
-              return false; // নাম না মিললে বাদ
-            }
+            if (!tutorName.includes(search.toLowerCase())) return false;
           }
 
-          // ---- ডেট দিয়ে ফিল্টার ----
           if (startDate || endDate) {
-            // ডাটাবেজে যদি departureDate না থাকে তবে তাকে ফিল্টার থেকে বাদ দিন
             if (!tutor.departureDate) return false;
-
-            // ডাটাবেজের '2026-6-15' এবং ফ্রন্টএন্ডের '2026-06-15' কে টাইমস্ট্যাম্পে রূপান্তর
             const tutorDateTimestamp = new Date(tutor.departureDate).getTime();
 
             if (startDate) {
               const startTimestamp = new Date(
                 `${startDate}T00:00:00.000Z`,
               ).getTime();
-              if (tutorDateTimestamp < startTimestamp) return false; // শুরুর ডেটের চেয়ে ছোট হলে বাদ
+              if (tutorDateTimestamp < startTimestamp) return false;
             }
 
             if (endDate) {
               const endTimestamp = new Date(
                 `${endDate}T23:59:59.999Z`,
               ).getTime();
-              if (tutorDateTimestamp > endTimestamp) return false; // শেষ ডেটের চেয়ে বড় হলে বাদ
+              if (tutorDateTimestamp > endTimestamp) return false;
             }
           }
 
-          return true; // সব কন্ডিশন মিললে ডাটা থাকবে
+          return true;
         });
 
-        // ফিল্টার হওয়া ডাটা ফ্রন্টএন্ডে পাঠানো
-        res.send(filteredResult);
+        const limitNum = parseInt(limit) || 0;
+        const result =
+          limitNum > 0 ? filteredResult.slice(0, limitNum) : filteredResult; // ✅
+
+        res.send(result);
       } catch (err) {
         res.status(500).send({ error: err.message });
       }
+
+
     });
-    app.get("/addTutor/:id",  async (req, res) => {
+
+    app.get("/addTutor/:id", async (req, res) => {
       const result = await dataCollection.findOne({
         _id: new ObjectId(req.params.id),
       });
@@ -273,24 +268,24 @@ async function run() {
 
     // CANCEL BOOKING
     app.patch("/cancelBooking/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    
-    // স্ট্যাটাস আপডেট করা
-    const result = await bookingCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { bookStatus: "cancelled" } }
-    );
+      try {
+        const id = req.params.id;
 
-    if (result.modifiedCount > 0) {
-      res.send({ success: true, message: "Updated" });
-    } else {
-      res.status(404).send({ success: false, message: "Not found" });
-    }
-  } catch (err) {
-    res.status(500).send({ success: false, error: err.message });
-  }
-});
+        // স্ট্যাটাস আপডেট করা
+        const result = await bookingCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { bookStatus: "cancelled" } },
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ success: true, message: "Updated" });
+        } else {
+          res.status(404).send({ success: false, message: "Not found" });
+        }
+      } catch (err) {
+        res.status(500).send({ success: false, error: err.message });
+      }
+    });
 
     // DELETE BOOKING
     app.delete("/bookSession/:id", async (req, res) => {
