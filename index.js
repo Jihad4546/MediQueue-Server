@@ -22,7 +22,7 @@ const client = new MongoClient(uri, {
 });
 
 const JWKS = createRemoteJWKSet(
-  new URL (`${process.env.CLIENT_UTL}/api/auth/jwks`)
+  new URL (`${process.env.CLIENT_URL}/api/auth/jwks`)
 )
 
 
@@ -36,7 +36,7 @@ const varifyToken = async (req, res, next) => {
 
   try {
     const { payload } = await jwtVerify(token, JWKS);
-    req.user = payload; // payload টা req এ save করুন
+    req.user = payload; 
     next();
   } catch (error) {
     console.log("varifyToken error:", error.message);
@@ -74,7 +74,7 @@ async function run() {
       }
     });
 
-    app.get("/addTutor", async (req, res) => {
+    app.get("/addTutor",  async (req, res) => {
       try {
         const { search, startDate, endDate, limit } = req.query;
         console.log("GET /addTutor query:", { search, startDate, endDate, limit })
